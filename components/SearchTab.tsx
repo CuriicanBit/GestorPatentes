@@ -1,13 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { PersonRecord } from '../types';
-import { Search, Car, User, IdCard, Building, Mail, ShieldCheck } from 'lucide-react';
+import { Search, Car, User, IdCard, Building, Mail, ShieldCheck, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface SearchTabProps {
   data: PersonRecord[];
+  onSync: () => Promise<{ success: boolean; count?: number; error?: string }>;
 }
 
-const SearchTab: React.FC<SearchTabProps> = ({ data }) => {
+const SearchTab: React.FC<SearchTabProps> = ({ data, onSync }) => {
   const [query, setQuery] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [toastMsg, setToastMsg] = useState('');
 
   const filteredData = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -27,26 +31,78 @@ const SearchTab: React.FC<SearchTabProps> = ({ data }) => {
     });
   }, [data, query]);
 
+  const handleQuickSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncStatus('idle');
+    
+    try {
+      const result = await onSync();
+      if (result.success) {
+        setSyncStatus('success');
+        setToastMsg(`Actualizado: ${result.count} registros`);
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      } else {
+        setSyncStatus('error');
+        setToastMsg(result.error || 'Error al sincronizar');
+        setTimeout(() => setSyncStatus('idle'), 4000);
+      }
+    } catch (e) {
+      setSyncStatus('error');
+      setToastMsg('Error inesperado');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
-    <div className="w-full max-w-5xl mx-auto p-4 space-y-8 animate-fadeIn">
+    <div className="w-full max-w-5xl mx-auto p-4 space-y-8 animate-fadeIn relative">
       
+      {/* Toast Notification */}
+      {syncStatus !== 'idle' && (
+        <div className={`fixed top-24 right-4 z-50 px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 border transition-all duration-300 animate-in slide-in-from-right-10 ${
+          syncStatus === 'success' 
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+            : 'bg-red-50 text-red-700 border-red-100'
+        }`}>
+          {syncStatus === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-bold text-sm">{toastMsg}</span>
+        </div>
+      )}
+
       {/* Search Header */}
-      <div className="relative w-full max-w-2xl mx-auto">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-          <Search className="h-6 w-6 text-indigo-400" />
+      <div className="flex items-center gap-4 max-w-3xl mx-auto">
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="h-6 w-6 text-indigo-400" />
+          </div>
+          <input
+            type="text"
+            className="block w-full pl-12 pr-32 py-4 bg-white border-2 border-indigo-100 rounded-full text-gray-700 placeholder-indigo-300 focus:outline-none focus:ring-4 focus:ring-indigo-200 focus:border-indigo-400 text-lg shadow-sm transition-all"
+            placeholder="Buscar por RUT, Nombre o Patente..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="absolute inset-y-0 right-0 pr-6 flex items-center pointer-events-none">
+            <span className="text-xs font-semibold text-indigo-300 bg-indigo-50 px-2 py-1 rounded-md">
+              {filteredData.length} Resultados
+            </span>
+          </div>
         </div>
-        <input
-          type="text"
-          className="block w-full pl-12 pr-4 py-4 bg-white border-2 border-indigo-100 rounded-full text-gray-700 placeholder-indigo-300 focus:outline-none focus:ring-4 focus:ring-indigo-200 focus:border-indigo-400 text-lg shadow-sm transition-all"
-          placeholder="Buscar por RUT, Nombre o Patente..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="absolute inset-y-0 right-0 pr-6 flex items-center pointer-events-none">
-          <span className="text-xs font-semibold text-indigo-300 bg-indigo-50 px-2 py-1 rounded-md">
-            {filteredData.length} Resultados
-          </span>
-        </div>
+
+        {/* Sync Button */}
+        <button
+          onClick={handleQuickSync}
+          disabled={isSyncing}
+          className={`h-14 w-14 flex-shrink-0 rounded-full border-2 flex items-center justify-center shadow-sm transition-all ${
+            isSyncing 
+              ? 'bg-indigo-50 border-indigo-200 cursor-not-allowed' 
+              : 'bg-white border-indigo-100 hover:border-orange-300 hover:text-orange-500 text-slate-400 hover:shadow-md active:scale-95'
+          }`}
+          title="Sincronizar datos ahora"
+        >
+          <RefreshCw className={`w-6 h-6 ${isSyncing ? 'animate-spin text-indigo-500' : ''}`} />
+        </button>
       </div>
 
       {/* Results Grid */}

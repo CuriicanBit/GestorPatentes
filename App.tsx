@@ -23,16 +23,43 @@ const App: React.FC = () => {
     const savedData = localStorage.getItem('app_data');
     return savedData ? JSON.parse(savedData) : INITIAL_DATA;
   });
+
+  const [lastSync, setLastSync] = useState<string | null>(() => {
+    return localStorage.getItem('last_sync_date');
+  });
   
   const [activeTab, setActiveTab] = useState<TabView>('search');
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('app_data', JSON.stringify(data));
   }, [data]);
 
+  // Save lastSync to localStorage
+  useEffect(() => {
+    if (lastSync) {
+      localStorage.setItem('last_sync_date', lastSync);
+    }
+  }, [lastSync]);
+
+  // Auto-sync on first load if data is empty
+  useEffect(() => {
+    if (data.length === 0 && !isAutoSyncing) {
+      const performAutoSync = async () => {
+        setIsAutoSyncing(true);
+        console.log("Iniciando auto-sincronización...");
+        await handleQuickSync();
+        setIsAutoSyncing(false);
+      };
+      performAutoSync();
+    }
+  }, []);
+
   const handleImport = (newData: PersonRecord[]) => {
     setData(newData);
+    const now = new Date().toLocaleString('es-CL');
+    setLastSync(now);
     // Add a small delay to switch tabs for better UX
     setTimeout(() => {
       setActiveTab('search');
@@ -40,9 +67,12 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (confirm('¿Estás seguro de restablecer los datos a la versión de prueba inicial?')) {
-      setData(INITIAL_DATA);
+    if (confirm('¿Estás seguro de restablecer los datos y borrar la caché?')) {
+      setData([]);
+      setLastSync(null);
       localStorage.removeItem('app_data');
+      localStorage.removeItem('last_sync_date');
+      window.location.reload();
     }
   };
 
@@ -162,6 +192,7 @@ const App: React.FC = () => {
       if (parsedData.length === 0) return { success: false, error: 'No se encontraron datos' };
       
       setData(parsedData);
+      setLastSync(new Date().toLocaleString('es-CL'));
       return { success: true, count: parsedData.length };
 
     } catch (err: any) {
@@ -224,10 +255,14 @@ const App: React.FC = () => {
               <p className="text-slate-500 max-w-md mx-auto">
                 Consulta rápida por Patente, RUT o Nombre del propietario.
                 <br />
-                <span className="text-indigo-400 text-sm">Base de datos actual: {data.length} registros</span>
+                <span className="text-indigo-400 text-sm font-medium">
+                  {data.length > 0 
+                    ? `Base de datos cargada: ${data.length} registros` 
+                    : 'Base de datos vacía'}
+                </span>
               </p>
             </div>
-            <SearchTab data={data} onSync={handleQuickSync} />
+            <SearchTab data={data} onSync={handleQuickSync} lastSync={lastSync} />
           </div>
         )}
 
